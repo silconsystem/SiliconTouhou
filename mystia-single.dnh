@@ -1,0 +1,235 @@
+#TouhouDanmakufu[Single]
+#ScriptVersion[3]
+#Title["Mystia-Lorelei"]
+#Text["Mystia-Lorelei[r]Spellcard 'n fx'"]
+
+/*** includes ---
+		--- ***/
+#include "script/default_system/Default_ShotConst.txt"
+#include "script/default_system/Default_Effect.txt"
+
+/*** Global variables ---
+		--- ***/
+let bossObj;
+let bossX = 0;
+let bossY = 0;
+let animFrame = 0;
+let animFrame2 = 0;
+
+// 																		--- images
+let imgMystia = GetCurrentScriptDirectory~ "textures/mystia-anim-48x64.png";
+let neuronBg = GetCurrentScriptDirectory~ "textures/neuron-backdrop.png";
+let blizzard = GetCurrentScriptDirectory~ "textures/blizzard.png";
+//																		--- soundFX
+let spellcardSFX = GetCurrentScriptDirectory~ "sfx/se_border.wav";
+let bossdeathSFX = GetCurrentScriptDirectory~ "sfx/se_enep01.wav";
+
+@Initialize {
+
+	// autodelete objects at end of script
+	SetAutoDeleteObject(true);
+
+	let objScene = GetEnemyBossSceneObjectID();
+	ObjEnemyBossScene_StartSpell(objScene);
+
+	// define bossObj and register
+	bossObj = ObjEnemy_Create(OBJ_ENEMY_BOSS);
+	ObjEnemy_Regist(bossObj);
+
+	// warp the boss here when loaded
+	ObjMove_SetPosition(bossObj,192 ,-100);
+
+	// move the boss texture to this X/Y location at speed 5
+	ObjMove_SetDestAtSpeed(bossObj,192,120,5);
+
+	// load sound
+	LoadSound(spellcardSFX);
+	LoadSound(bossdeathSFX);
+
+	// play sound
+	PlaySE(spellcardSFX);
+
+	mainTask;		// run maintask
+
+}
+
+@Event {
+
+	// set boss timer and health
+	alternative(GetEventType())
+	case(EV_REQUEST_LIFE) {
+		SetScriptResult(500);
+	}
+	case(EV_REQUEST_TIMER) {
+		SetScriptResult(45);
+	}
+	case(EV_REQUEST_SPELL_SCORE) {
+		SetScriptResult(30000)
+	}
+
+}
+
+@MainLoop {
+
+	// update the boss sprites X & Y coordinates
+	bossX = ObjMove_GetX(bossObj);
+	bossY = ObjMove_GetY(bossObj);
+
+	// collision for shots and player
+	ObjEnemy_SetIntersectionCircleToShot(bossObj,bossX ,bossY ,16);
+	ObjEnemy_SetIntersectionCircleToPlayer(bossObj,bossX ,bossY ,36);
+
+	/*** NOTE ---
+		 !! yield has to be called to make the engine look for other tasks !!
+		 ---***/
+	yield;
+}
+
+@Finalize {	/*** EMPTY FUNCTION ***/}
+
+/*** functions ---
+		--- ***/
+function wait(w) { loop(w) { yield; } }
+
+function angleToPlayer {
+
+	let dir = atan2(GetPlayerY-bossY, GetPlayerX-bossX);
+	return dir;
+
+}
+
+/*** tasks ---
+		--- ***/
+task mainTask {
+
+	renderBoss;
+	renderBG;
+	movement;
+	TEnd;
+
+}
+
+task renderBG {
+
+	let scrollTex = 0;
+	
+	// render the background
+	let obj = ObjPrim_Create(OBJ_SPRITE_2D);
+	Obj_SetRenderPriorityI(obj,21);
+	ObjPrim_SetTexture(obj, neuronBg);
+	ObjSprite2D_SetSourceRect(obj ,0 ,0 ,1024 ,768);
+	ObjSprite2D_SetDestRect(obj ,0 ,0 ,GetStgFrameWidth ,GetStgFrameHeight);
+
+	// render the overlay
+	let overlayObj = ObjPrim_Create(OBJ_SPRITE_2D);
+	Obj_SetRenderPriorityI(overlayObj,21); 
+	ObjPrim_SetTexture(overlayObj,blizzard); 
+	ObjRender_SetBlendType(overlayObj,BLEND_ADD_ARGB);
+	ObjRender_SetAlpha(overlayObj,200);
+	ObjSprite2D_SetSourceRect(overlayObj,0,0,512,512);
+	ObjSprite2D_SetDestRect(overlayObj,0,0,GetStgFrameWidth,GetStgFrameHeight);
+	
+	// As long as the boss is alive, scroll the overlay diagonally towards bottom right.
+	while(!Obj_IsDeleted(bossObj)) {
+		ObjSprite2D_SetSourceRect(overlayObj,0-scrollTex,0-scrollTex,512-scrollTex,512-scrollTex);
+		scrollTex += 2;
+		yield;
+	}
+	Obj_Delete(overlayObj);	
+
+
+}
+
+task renderBoss {
+	let dir;
+	let speed;
+
+	// set texture, set centre as true centre
+	ObjPrim_SetTexture(bossObj, imgMystia);
+	ObjSprite2D_SetSourceRect(bossObj,0,0,48,64);
+	ObjSprite2D_SetDestCenter(bossObj);
+	ObjRender_SetScaleXYZ(bossObj,1.0 ,1.0 ,0);
+
+	while(!Obj_IsDeleted(bossObj)){
+
+		// update boss speed and location locally
+		dir = ObjMove_GetAngle(bossObj);
+		speed = ObjMove_GetSpeed(bossObj);
+
+		// if the boss is idle, show this image
+		if(speed == 0) {
+			// boss at location
+			ObjRender_SetAngleXYZ(bossObj,0 ,0 ,0);
+			if(animFrame < 15) { ObjSprite2D_SetSourceRect(bossObj,0 ,0 ,48 ,64); }
+			if(animFrame >= 15 && animFrame < 30) { ObjSprite2D_SetSourceRect(bossObj,48 ,0 ,96 ,64); }
+			if(animFrame >= 30 && animFrame < 45) { ObjSprite2D_SetSourceRect(bossObj,96 ,0 ,144 ,64); }
+			if(animFrame >= 45) { ObjSprite2D_SetSourceRect(bossObj,144 ,0 ,192 ,64); }
+			animFrame2 = 0;
+		}
+		else if(cos(dir) < 0) {
+			// boss moving right
+			ObjRender_SetAngleXYZ(bossObj,0 ,180 ,0); // flip vertical
+			if(animFrame2 < 15) { ObjSprite2D_SetSourceRect(bossObj,0 ,64 ,48 ,128); }
+			if(animFrame2 >= 15 && animFrame2 < 30) { ObjSprite2D_SetSourceRect(bossObj,48 ,64 ,96 ,128); }
+			if(animFrame2 >= 30 && animFrame2 < 45) { ObjSprite2D_SetSourceRect(bossObj,96 ,64 ,144 ,128); }
+			if(animFrame2 >= 45) { ObjSprite2D_SetSourceRect(bossObj,144 ,64 ,192 ,128); }
+		}
+		else if(cos(dir) > 0) {
+			//boss moving left
+			ObjRender_SetAngleXYZ(bossObj,0 ,180 ,0); // flip vertical
+			if(animFrame2 < 15) { ObjSprite2D_SetSourceRect(bossObj,0 ,128 ,48 ,192); }
+			if(animFrame2 >= 15 && animFrame2 < 30) { ObjSprite2D_SetSourceRect(bossObj,48 ,128 ,96 ,192); }
+			if(animFrame2 >= 30 && animFrame2 < 45) { ObjSprite2D_SetSourceRect(bossObj,96 ,128 ,144 ,192); }
+			if(animFrame2 >= 45) { ObjSprite2D_SetSourceRect(bossObj,144 ,128 ,192 ,192); }
+		}
+
+		animFrame++;				// increment animation frames
+		animFrame2+=2;				// count animFrame2
+		if(animFrame > 60) { animFrame = 0; } 	// reset animFrame when higher than 60
+		yield;
+	}
+
+}
+
+task movement {
+
+	wait(60);
+
+	while(!Obj_IsDeleted(bossObj)) {
+		ObjMove_SetDestAtSpeed(bossObj,60 ,120 ,2);	// move left
+		fire;
+		wait(180);
+		fire;
+		ObjMove_SetDestAtSpeed(bossObj,300 ,120 ,2);	// move right
+		wait(180);
+		fire;
+	}
+
+}
+
+task fire {
+	let dir = angleToPlayer;	// call function angleToPlayer, calculate the angle and store it inside dir.
+	loop(10) { 
+		CreateShotA1(bossX,bossY,3,dir-20,14,0);
+		CreateShotA1(bossX,bossY,3,angleToPlayer,14,0);
+		CreateShotA1(bossX,bossY,3,dir+20,14,0);
+		wait(3);
+	}
+} 
+
+task TEnd {
+
+	while(ObjEnemy_GetInfo(bossObj, INFO_LIFE) > 0) {
+		yield;
+	}
+
+	PlaySE(bossdeathSFX);
+	TExplosionA(bossX, bossY, 10, 0.5);
+	Obj_Delete(bossObj);
+	DeleteShotAll(TYPE_ALL, TYPE_ITEM);
+	wait(120);
+	CloseScript(GetOwnScriptID());
+
+}
+/*** End of Script ---
+	--- ***/
