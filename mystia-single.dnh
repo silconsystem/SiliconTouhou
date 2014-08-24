@@ -1,7 +1,7 @@
 #TouhouDanmakufu[Single]
 #ScriptVersion[3]
 #Title["Mystia-Lorelei"]
-#Text["Mystia-Lorelei[r]Spellcard 'n fx'"]
+#Text["Mystia-Lorelei[r]Spellcard 'n fx"]
 
 /*** includes ---
 		--- ***/
@@ -15,6 +15,7 @@ let bossX = 0;
 let bossY = 0;
 let animFrame = 0;
 let animFrame2 = 0;
+let count = 0;
 
 // 																		--- images
 let imgMystia = GetCurrentScriptDirectory~ "textures/mystia-anim-48x64.png";
@@ -23,6 +24,7 @@ let blizzard = GetCurrentScriptDirectory~ "textures/blizzard.png";
 //																		--- soundFX
 let spellcardSFX = GetCurrentScriptDirectory~ "sfx/se_border.wav";
 let bossdeathSFX = GetCurrentScriptDirectory~ "sfx/se_enep01.wav";
+let bulletSFX = GetCurrentScriptDirectory~ "sfx/se_bullet.wav";
 
 @Initialize {
 
@@ -45,9 +47,7 @@ let bossdeathSFX = GetCurrentScriptDirectory~ "sfx/se_enep01.wav";
 	// load sound
 	LoadSound(spellcardSFX);
 	LoadSound(bossdeathSFX);
-
-	// play sound
-	PlaySE(spellcardSFX);
+	LoadSound(bulletSFX);
 
 	mainTask;		// run maintask
 
@@ -78,6 +78,15 @@ let bossdeathSFX = GetCurrentScriptDirectory~ "sfx/se_enep01.wav";
 	// collision for shots and player
 	ObjEnemy_SetIntersectionCircleToShot(bossObj,bossX ,bossY ,16);
 	ObjEnemy_SetIntersectionCircleToPlayer(bossObj,bossX ,bossY ,36);
+/*
+	if(count%120==0 && count % 240 == 0) {
+		ObjMove_SetDestAtFrame(bossObj ,rand(bossX+20, bossX-50) ,rand(bossY-60, bossY-120) ,60);
+	}
+*/
+	if(count%120==0 && count >= 0) { fireOne; }
+	if(count%120==60 && count >=0) { fireTwo; }
+
+	count++;
 
 	/*** NOTE ---
 		 !! yield has to be called to make the engine look for other tasks !!
@@ -115,7 +124,7 @@ task renderBG {
 	
 	// render the background
 	let obj = ObjPrim_Create(OBJ_SPRITE_2D);
-	Obj_SetRenderPriorityI(obj,21);
+	Obj_SetRenderPriorityI(obj,20);
 	ObjPrim_SetTexture(obj, neuronBg);
 	ObjSprite2D_SetSourceRect(obj ,0 ,0 ,1024 ,768);
 	ObjSprite2D_SetDestRect(obj ,0 ,0 ,GetStgFrameWidth ,GetStgFrameHeight);
@@ -135,8 +144,7 @@ task renderBG {
 		scrollTex += 2;
 		yield;
 	}
-	Obj_Delete(overlayObj);	
-
+	Obj_Delete(overlayObj);
 
 }
 
@@ -166,7 +174,7 @@ task renderBoss {
 			if(animFrame >= 45) { ObjSprite2D_SetSourceRect(bossObj,144 ,0 ,192 ,64); }
 			animFrame2 = 0;
 		}
-		else if(cos(dir) < 0) {
+		else if(cos(dir) > 0) {
 			// boss moving right
 			ObjRender_SetAngleXYZ(bossObj,0 ,180 ,0); // flip vertical
 			if(animFrame2 < 15) { ObjSprite2D_SetSourceRect(bossObj,0 ,64 ,48 ,128); }
@@ -174,7 +182,7 @@ task renderBoss {
 			if(animFrame2 >= 30 && animFrame2 < 45) { ObjSprite2D_SetSourceRect(bossObj,96 ,64 ,144 ,128); }
 			if(animFrame2 >= 45) { ObjSprite2D_SetSourceRect(bossObj,144 ,64 ,192 ,128); }
 		}
-		else if(cos(dir) > 0) {
+		else if(cos(dir) < 0) {
 			//boss moving left
 			ObjRender_SetAngleXYZ(bossObj,0 ,180 ,0); // flip vertical
 			if(animFrame2 < 15) { ObjSprite2D_SetSourceRect(bossObj,0 ,128 ,48 ,192); }
@@ -196,26 +204,43 @@ task movement {
 	wait(60);
 
 	while(!Obj_IsDeleted(bossObj)) {
+		
+		// play sound
+		PlaySE(spellcardSFX);
+
 		ObjMove_SetDestAtSpeed(bossObj,60 ,120 ,2);	// move left
-		fire;
 		wait(180);
-		fire;
 		ObjMove_SetDestAtSpeed(bossObj,300 ,120 ,2);	// move right
 		wait(180);
-		fire;
+
 	}
 
 }
 
-task fire {
+task fireOne {
 	let dir = angleToPlayer;	// call function angleToPlayer, calculate the angle and store it inside dir.
-	loop(10) { 
-		CreateShotA1(bossX,bossY,3,dir-20,14,0);
-		CreateShotA1(bossX,bossY,3,angleToPlayer,14,0);
-		CreateShotA1(bossX,bossY,3,dir+20,14,0);
+	loop(3) { 
+		CreateShotA1(bossX,bossY,3,angleToPlayer-20,DS_BUTTERFLY_RED,6);
+		CreateShotA1(bossX,bossY,2,angleToPlayer,DS_BUTTERFLY_RED,6);
+		CreateShotA1(bossX,bossY,1,angleToPlayer+20,DS_BUTTERFLY_RED,6);
+		wait(30);
+	}
+	PlaySE(bulletSFX);
+}
+
+task fireTwo {
+	if(ObjEnemy_GetInfo(bossObj, INFO_LIFE) <= 0) { return; } // default kill to prevent (0,0) spawning
+	let angleT = 0;
+	loop(18) {
+		CreateShotA1(bossX+90*cos(angleT) ,bossY+90*sin(angleT) ,1 ,angleT ,DS_STAR_M_RED ,1);
+		CreateShotA1(bossX+90*cos(angleT) ,bossY+90*sin(angleT) ,3 ,angleT ,DS_STAR_M_BLUE ,6);
+		CreateShotA1(bossX+90*cos(angleT) ,bossY+90*sin(angleT) ,5 ,angleT ,DS_STAR_M_GREEN ,12);
+		angleT+= 360/18;
 		wait(3);
 	}
-} 
+	PlaySE(bulletSFX);
+	
+}
 
 task TEnd {
 

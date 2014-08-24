@@ -1,0 +1,158 @@
+#TouhouDanmakufu[Single]
+#ScriptVersion[3]
+#Title["Helga"]
+#Text["testscript for:[r]Helga von[r]Grabenschwester"]
+
+/*** Includes ---
+		--- ***/
+#include "script/default_system/Default_ShotConst.txt"
+#include "script/default_system/Default_Effect.txt"
+
+/*** Globals ---
+		--- ***/
+let helgaObj;
+let helgaX = 0;
+let helgaY = 0;
+let animFrame = 0;
+//let animFrame2 = 0;
+//let count = 0;
+
+/*** Images ---
+		--- ***/
+let helgaImg = GetCurrentScriptDirectory~ "textures/helga/helga64x64.png";
+let castleBG = GetCurrentScriptDirectory~ "textures/helga/castle_hall.png";
+let overlay = GetCurrentScriptDirectory~ "textures/helga/overlay400x400.png";
+
+/*** Sounds and SoundEffects ---
+		--- ***/
+let borderSFX = GetCurrentScriptDirectory~ "sfx/se_border.wav";
+
+@Initialize {
+
+	// set autodelete at script end
+	SetAutoDeleteObject(true);
+
+	// define scene variable
+	let objScene = GetEnemyBossObjectID();
+	ObjEnemyBossScene_StartSpell(objScene);
+
+	// define and register Helga as boss
+	helgaObj = ObjEnemy_Create(OBJ_ENEMY_BOSS);
+	ObjEnemy_Regist(helgaObj);
+
+	// move Helga to position when loaded
+	ObjMove_SetPosition(helgaObj, 192 ,-120);
+
+	// move XY location at speed 3
+	ObjMove_SetDestAtSpeed(helgaObj ,192 ,120 ,3);
+
+	// load sounds
+	LoadSound(borderSFX);
+
+	// run mainTask
+	mainTask;
+
+}
+
+@Event {
+
+	// set Helga's timer and HP
+	alternative(GetEventType())
+	case(EV_REQUEST_LIFE) {
+		SetScriptResult(900);
+	}
+	case(EV_REQUEST_TIMER) {
+		SetScriptResult(45);
+	}
+	case(EV_REQUEST_SPELL_SCORE) {
+		SetScriptResult(30000);
+	}
+
+}
+
+@MainLoop {
+
+	// update Helga's location onscreen
+	helgaX = ObjMove_GetX(helgaObj);
+	helgaY = ObjMove_GetY(helgaObj);
+
+	//set collision for shots & player
+	ObjEnemy_SetIntersectionCircleToShot(helgaObj , helgaX ,helgaY ,16);
+	ObjEnemy_SetIntersectionCircleToPlayer(helgaObj ,helgaX ,helgaY ,32);
+
+	yield;		// look for other tasks !!
+
+}
+
+@Finalize {
+
+}
+
+/*** Functions ---
+		--- ***/
+// yield helper function
+function wait(w) { loop(w) { yield; }}
+
+// calculate angle to player for homing
+function angleToPlayer {
+	let dir = atan2(GetPlayerY-helgaY, GetPlayerX-helgaX);
+	return dir;
+}
+
+/*** Tasks ---
+		--- ***/
+task mainTask {				/*** --- mainTask --- ***/ 
+	renderHelga;
+	moveHelga;
+}
+
+task renderHelga {			/*** --- renderHelga --- ***/
+	let dir;
+	let speed;
+
+	// set texture, centre & true centre
+	ObjPrim_SetTexture(helgaObj, helgaImg);
+	ObjSprite2D_SetSourceRect(helgaObj ,0 ,0 ,64 ,64);
+	ObjSprite2D_SetDestCenter(helgaObj);
+	ObjRender_SetScaleXYZ(helgaObj ,1.0 ,1.0 ,0);
+
+	// drawloop for animations
+	while(!Obj_IsDeleted(helgaObj)) {
+		
+		// update speed and location
+		dir = ObjMove_GetAngle(helgaObj);
+		speed = ObjMove_GetSpeed(helgaObj);
+
+		// when idle, show these frames
+		if(speed == 0) {
+			// at standstill
+			ObjRender_SetAngleXYZ(helgaObj ,0 ,0 ,0);
+			if(animFrame < 15) { ObjSprite2D_SetSourceRect(helgaObj ,0 ,0 ,64 ,64); }
+			if(animFrame >= 30 && animFrame < 45) { ObjSprite2D_SetSourceRect(helgaObj ,64 ,0 ,128 ,64); }
+			if(animFrame >= 45) { ObjSprite2D_SetSourceRect(helgaObj ,128 ,0 ,192 ,64); }
+		}
+		else if(cos(dir) > 0) {
+			// Helga moving right
+			ObjRender_SetAngleXYZ(helgaObj ,0 ,180 ,0);	// flip vertical
+		}
+		else if(cos(dir) < 0) {
+			// Helga moving left
+			ObjRender_SetAngleXYZ(helgaObj ,0 ,180 ,0);	// flip vertical
+		}
+
+		animFrame++;				// increment animation frames
+		if(animFrame > 60) { animFrame = 0; }	// reset at 60 frames
+		yield;
+	}
+}
+
+task moveHelga {			/*** --- moveHelga --- ***/
+	wait(60);
+
+	while(!Obj_IsDeleted(helgaObj)) {
+		ObjMove_SetDestAtSpeed(helgaObj ,64 ,128 ,3);
+		wait(180);
+		ObjMove_SetDestAtSpeed(helgaObj ,300 ,120 ,3);
+		wait(180);
+	}
+}
